@@ -9,16 +9,17 @@ import time
 WIDTH = 640
 HEIGHT = 480
 
-TEMPLATE_L = .2					#in meters
-TEMPLATE_H = .2					#in meters
+TEMPLATE_L = .07					#in meters
+TEMPLATE_H = .07				#in meters
 
 CENTER_X_px = 334				#cam center in pixels
 CENTER_Y_px = 275	
 
 xfov = 62.2 * math.pi/180			# pi camera v2's field of view in radians
 yfov = 48.8 * math.pi/180
+
 def send_land_message(x, y):
-	message = vehicle.message_factory.landing_target_encode(
+	message = drone.message_factory.landing_target_encode(
 		0,	# ms since boot, a time stamp
 		0,	# target ID for case of multiple targets
 		0,	# MAV_FRAME enum specifying frame
@@ -27,8 +28,8 @@ def send_land_message(x, y):
 		0,	# distance to the target from vehicle in meters
 		0,	# size of target in radians along x-axis
 		0)	# size along y-axis
-	vehicle.send_mavlink(message)
-	vehicle.flush()
+	drone.send_mavlink(message)
+	drone.flush()
 
 def calculate_dist(corners):
 	sumx = 0
@@ -63,21 +64,25 @@ def calculate_dist(corners):
 
 	return (x, y)
 
-connection_str = "tcp:127.0.0.1:57600"
-vehicle = connect(connection_str ,wait_ready=True)
+#
+#	MAIN
+#
+try:
+	connection_str = "tcp:127.0.0.1:57600"
+	drone = connect(connection_str ,wait_ready=True)	
+	connected = True
+except:
+	connected = False
 
-
-if not vehicle:
-	print('Not connected')
+if not connected:
+	print ("Unable to connect to drone")
+	
 else:
-	WIDTH = 640
-	HEIGHT = 480
-
-	TEMPLATE_L = .2					#in meters
-	TEMPLATE_H = .2					#in meters
-
-	CENTER_X_px = 334				#cam center in pixels
-	CENTER_Y_px = 275	
+	print ("Connected to drone")
+	
+	# set parameters 
+	drone.parameters['PLND_ENABLED'] = 1
+	drone.parameters['PLND_TYPE'] = 1
 
 	#TODO load pi camera and aruco library
 	aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
@@ -94,18 +99,23 @@ else:
 		vid = rawCapt.array
 		rawCapt.truncate(0)
 		corners, ids, rejects = aruco.detectMarkers(vid, aruco_dic)
-		B = time.time()
-		print "Time: %0.3f" % (B-A)
+		
 		if len(corners) is not 0:
 			print(corners)
 			(x, y) = calculate_dist(corners)
 			send_land_message(x, y)
-			print (x, y)
+			#print (x, y)
+			B = time.time()
+			print "Time: %0.3f" % (B-A)
+			
 		else:
-			#TODO What happens when target is out of frame???
 			path = '/home/pi/drone_scripts/fail.jpg'
 			cv2.imwrite(str(path), vid)
-			break
+			#print ("Target not in frame, use default RTL")
+			#vehicle.mode = VehicleMode("RTL")
+			#print ("END")
+			#break
 		
-	#print "Heartbeat: %s" % vehicle.last_heartbeat
-		
+	camera.close()
+	drone.close()	
+	print("Done")		
