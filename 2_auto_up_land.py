@@ -47,11 +47,11 @@ def send_land_message(x, y, z):
 def distance(x1, y1, x2, y2):
 	return math.hypot(x2-x1, y2-y1)
 
-def calculate_xyz(corners):
+def calculate_xyz(corners, flag):
 	sumx = 0
 	sumy = 0
 	
-	for x in corners[0][0]:
+	for x in corners:
 		sumx = sumx + x[0]
 		sumy = sumy + x[1]
 	
@@ -61,11 +61,11 @@ def calculate_xyz(corners):
 	x = (avgx - WIDTH/2)*xfov/WIDTH
 	y = (avgy - HEIGHT/2)*yfov/HEIGHT
 
-	side1 = distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][1][0], corners[0][0][1][1]) 
-	side2 = distance(corners[0][0][0][0], corners[0][0][0][1], corners[0][0][2][0], corners[0][0][2][1])
+	side1 = distance(corners[0][0], corners[0][1], corners[1][0], corners[1][1]) 
+	side2 = distance(corners[0][0], corners[0][1], corners[2][0], corners[2][1])
 	area = side1 * side2
 
-	if TEMPLATE_L is .07:
+	if flag is .07:
 		z = get_z_7x7(area)
 	else:
 		z = get_z_20x20(area)
@@ -110,26 +110,17 @@ def arm_and_takeoff(aTargetAltitude):
         print(" Altitude: ", drone.location.global_relative_frame.alt)
         # Break and return from function just below target altitude.
         if drone.location.global_relative_frame.alt >= aTargetAltitude * 0.9:
-            print("Reached target altitude")
+            print("Rea ched target altitude")
             break
         time.sleep(1)
 
 
-arm_and_takeoff(2.5)
-
-print("Open camera")
-camera = PiCamera()
-camera.resolution = (WIDTH, HEIGHT)
-camera.framerate = 30
-camera.shutter_speed = 1100
-camera.ISO = 100
-camera.meter_mode = 'matrix'
-
+arm_and_takeoff(4)
 
 print("Begin camera, dictionary, params")
 
-print("Set default/target airspeed")
-drone.airspeed = 2.5
+print("Set default/target airspeed to 3")
+drone.airspeed = 3
 
 print("Set parameters") 
 drone.parameters['PLND_ENABLED'] = 1
@@ -138,12 +129,21 @@ drone.parameters['PLND_TYPE'] = 1
 print("Set dictionary")
 #TODO load pi camera and aruco library
 aruco_dic = aruco.Dictionary_get(aruco.DICT_6X6_250)
+print("Open camera")
+camera = PiCamera()
+camera.resolution = (WIDTH, HEIGHT)
+camera.framerate = 30
+camera.shutter_speed = 1100
+camera.ISO = 100
+camera.meter_mode = 'matrix'
+
 #print(drone.battery)
 
 print("Start landing")
 count = 1
+
 while(1):
-	#A = time.time()
+	
 	print("Count: " + str(count))
 	rawCapt = PiRGBArray(camera, size = (WIDTH, HEIGHT))
 	time.sleep(0.1)
@@ -153,25 +153,30 @@ while(1):
 	time.sleep(0.1)
 	corners, ids, rejects = aruco.detectMarkers(vid, aruco_dic)
 	time.sleep(0.1)
-	#print("CORNERS:")
-	#print(corners)
 
-	if len(corners) is not 0:
-		count = 0
-		print(corners)
-		(x, y, z) = calculate_xyz(corners)
+	numMarkers = len(corners)
+	print("Number of Markers: " + str(numMarkers))
+
+	if numMarkers is 1:
+		if ids[0][0] is 100:
+			(x, y, z) = calculate_xyz(corners[0][0], 0.20)
+		else:
+			(x, y, z) = calculate_xyz(corners[0][0], 0.07)
 		send_land_message(x, y, z)
-		print ("Landing message sent")
-	#	B = time.time()
-	#	print("Time: %0.3f") % (B-A)
-		
+		print ("Landing message for " + str(ids[0][0]))
+
+	elif numMarkers is 2:
+		(x, y, z) = calculate_xyz(corners[1][0], 0.07)
+		print ("Landing message for 101")
+	
 	else:
 		path = '/home/pi/drone_scripts/fail' + str(count) + '.jpg'
 		cv2.imwrite(str(path), vid)
 		if count == 10:
 			print ("Target not in frame, use default RTL")
 			break
-	
+
+		
 	count = count + 1
 
 	#if drone.location.global_relative_frame.alt <= 0.7:
